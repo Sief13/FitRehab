@@ -19,7 +19,9 @@ body {
 
 .container { max-width: 960px; margin: 0 auto; padding: 32px 16px; }
 h1 { margin: 0 0 8px; font-size: 1.6rem; }
+h2 { margin: 0 0 12px; font-size: 1.2rem; }
 .muted { color: var(--muted); margin: 0 0 24px; }
+.muted.small { font-size: 0.9rem; margin: 0 0 12px; }
 
 .card {
   background: var(--card);
@@ -41,7 +43,7 @@ select, button {
 }
 button { background: var(--accent); color: #04222a; border: none; font-weight: 600; }
 button.secondary { background: #1b2540; color: var(--text); border: 1px solid var(--border); }
-button:disabled { opacity: 0.6; cursor: wait; }
+button:disabled, select:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .error { color: #fb7185; }
 
@@ -75,4 +77,43 @@ button:disabled { opacity: 0.6; cursor: wait; }
 }
 .hud-label { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
 .hud-value { font-size: 1.8rem; font-weight: 700; }
-.hud-value.small { font-size: 1rem; line-height: 2.2rem; }
+
+/* score colours */
+.tone-good { --tone: #34d399; }
+.tone-ok { --tone: #fbbf24; }
+.tone-bad { --tone: #fb7185; }
+.score { color: var(--tone, var(--text)); font-weight: 700; }
+
+/* live feedback banner */
+.banner {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+}
+.banner-info { background: #1b2540; color: var(--muted); }
+.banner-good { background: rgba(52, 211, 153, 0.15); color: #34d399; border-color: #34d399; }
+.banner-warn { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: #fbbf24; }
+
+/* rep table */
+.reps { width: 100%; margin-top: 16px; border-collapse: collapse; font-size: 0.95rem; }
+.reps th, .reps td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.reps th { color: var(--muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; }
+
+/* session summary */
+.summary {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #101728;
+}
+.summary-top { display: flex; align-items: center; gap: 24px; margin-bottom: 12px; }
+.big-score .score { font-size: 3.2rem; line-height: 1; display: block; }
+.facts { list-style: none; margin: 0; padding: 0; color: var(--muted); line-height: 1.7; }
+.bar-row { display: grid; grid-template-columns: 130px 1fr 36px; gap: 10px; align-items: center; margin: 8px 0; }
+.bar { height: 10px; background: #1b2540; border-radius: 999px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--tone, var(--accent)); }
+.bar-value { text-align: right; color: var(--muted); }
+.focus { margin: 12px 0 0; font-weight: 600; }

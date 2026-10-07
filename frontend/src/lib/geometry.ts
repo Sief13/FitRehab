@@ -24,6 +24,17 @@ export function calculateAngle(a: Point, b: Point, c: Point): number {
   return (Math.acos(cos) * 180) / Math.PI;
 }
 
+/**
+ * How far the segment A-B is tilted away from a perfectly vertical line, in degrees.
+ * 0 = vertical, 90 = horizontal. Direction (up/down, left/right) is ignored.
+ * Used for torso lean (shoulder-hip) and elbow drift (shoulder-elbow).
+ */
+export function tiltFromVertical(a: Point, b: Point): number {
+  const dx = Math.abs(a.x - b.x);
+  const dy = Math.abs(a.y - b.y);
+  return (Math.atan2(dx, dy) * 180) / Math.PI;
+}
+
 /** Average visibility of a set of landmarks (0-1). Used to pick the better-seen body side. */
 export function averageVisibility(points: Point[]): number {
   if (points.length === 0) return 0;

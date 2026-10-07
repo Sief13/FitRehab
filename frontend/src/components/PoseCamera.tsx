@@ -4,9 +4,22 @@ import {
   FilesetResolver,
   PoseLandmarker,
 } from "@mediapipe/tasks-vision";
-import { EXERCISES, type ExerciseKey } from "../lib/exercises";
+import {
+  EXERCISES,
+  extractSide,
+  measureAngle,
+  pickSide,
+  type ExerciseKey,
+} from "../lib/exercises";
 import { RepCounter, type CounterState } from "../lib/repCounter";
-import { averageVisibility, calculateAngle } from "../lib/geometry";
+import {
+  scoreRep,
+  scoreTone,
+  summarizeSession,
+  type RepResult,
+  type SessionSummary,
+} from "../lib/scoring";
+import SessionSummaryCard from "./SessionSummaryCard";
 
 // Keep this version identical to the installed npm package version
 const WASM_URL =
@@ -15,6 +28,17 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 
 type Status = "idle" | "loading" | "running" | "error";
+
+interface Feedback {
+  text: string;
+  tone: "good" | "warn" | "info";
+}
+
+const IDLE_HUD: CounterState = { angle: 0, posture: 0, reps: 0, stage: "unknown" };
+const READY: Feedback = {
+  text: "Press Start camera, then begin your first rep.",
+  tone: "info",
+};
 
 export default function PoseCamera() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -25,20 +49,19 @@ export default function PoseCamera() {
   const lastVideoTimeRef = useRef<number>(-1);
   const exerciseRef = useRef<ExerciseKey>("squat");
   const counterRef = useRef<RepCounter>(new RepCounter(EXERCISES.squat));
-  const lastHudRef = useRef<CounterState>({ angle: 0, reps: 0, stage: "unknown" });
+  const lastHudRef = useRef<CounterState>(IDLE_HUD);
+  const resultsRef = useRef<RepResult[]>([]);
+  const sessionStartRef = useRef<number>(0);
+  const liveCueRef = useRef<boolean>(false);
 
   const [exercise, setExercise] = useState<ExerciseKey>("squat");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
-  const [hud, setHud] = useState<CounterState>({ angle: 0, reps: 0, stage: "unknown" });
-
-  // Switch exercise -> new counter
-  useEffect(() => {
-    exerciseRef.current = exercise;
-    counterRef.current = new RepCounter(EXERCISES[exercise]);
-    lastHudRef.current = { angle: 0, reps: 0, stage: "unknown" };
-    setHud({ angle: 0, reps: 0, stage: "unknown" });
-  }, [exercise]);
+  const [hud, setHud] = useState<CounterState>(IDLE_HUD);
+  const [results, setResults] = useState<RepResult[]>([]);
+  const [feedback, setFeedback] = useState<Feedback>(READY);
+  const [liveCue, setLiveCue] = useState(false);
+  const [summary, setSummary] = useState<SessionSummary | null>(null);
 
   // Cleanup when leaving the page
   useEffect(() => {
@@ -54,6 +77,26 @@ export default function PoseCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+  }
+
+  /** Clear counter, rep list, summary and feedback (used by Start, Reset and exercise change) */
+  function clearSession() {
+    counterRef.current.reset();
+    lastHudRef.current = IDLE_HUD;
+    resultsRef.current = [];
+    liveCueRef.current = false;
+    setHud(IDLE_HUD);
+    setResults([]);
+    setSummary(null);
+    setLiveCue(false);
+    setFeedback(READY);
+  }
+
+  function changeExercise(key: ExerciseKey) {
+    exerciseRef.current = key;
+    counterRef.current = new RepCounter(EXERCISES[key]);
+    setExercise(key);
+    clearSession();
   }
 
   async function createLandmarker(): Promise<PoseLandmarker> {
@@ -90,7 +133,9 @@ export default function PoseCamera() {
       video.srcObject = stream;
       await video.play();
 
-      counterRef.current.reset();
+      clearSession();
+      sessionStartRef.current = Date.now();
+      setFeedback({ text: "Go! Start your first rep.", tone: "info" });
       setStatus("running");
       loop();
     } catch (e) {
@@ -105,6 +150,13 @@ export default function PoseCamera() {
     stopCamera();
     const canvas = canvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+
+    const cfg = EXERCISES[exerciseRef.current];
+    setSummary(
+      summarizeSession(cfg, resultsRef.current, Date.now() - sessionStartRef.current),
+    );
+    liveCueRef.current = false;
+    setLiveCue(false);
     setStatus("idle");
   }
 
@@ -136,16 +188,39 @@ export default function PoseCamera() {
         });
         drawing.drawLandmarks(pose, { color: "#f472b6", radius: 3 });
 
-        // Pick the body side that the camera sees better
         const cfg = EXERCISES[exerciseRef.current];
-        const leftPts = cfg.left.map((i) => pose[i]);
-        const rightPts = cfg.right.map((i) => pose[i]);
-        const side =
-          averageVisibility(leftPts) >= averageVisibility(rightPts) ? leftPts : rightPts;
+        const side = pickSide(pose, cfg.joints);
+        const body = extractSide(pose, side, vw, vh);
 
-        // Convert normalized coords to pixels so the angle is not distorted
-        const [a, b, c] = side.map((p) => ({ x: p.x * vw, y: p.y * vh }));
-        const state = counterRef.current.update(calculateAngle(a, b, c));
+        const angle = measureAngle(cfg, body);
+        const postureDeviation = cfg.posture.measure(body);
+        const { state, event } = counterRef.current.update(
+          angle,
+          postureDeviation,
+          performance.now(),
+        );
+
+        // A rep just finished (or a partial rep was detected)
+        if (event) {
+          if (event.type === "rep") {
+            const repResult = scoreRep(cfg, event.summary, state.reps);
+            resultsRef.current = [...resultsRef.current, repResult];
+            setResults(resultsRef.current);
+            setFeedback({
+              text: repResult.feedback.join(" "),
+              tone: repResult.issues.length === 0 ? "good" : "warn",
+            });
+          } else {
+            setFeedback({ text: cfg.messages.partial, tone: "warn" });
+          }
+        }
+
+        // Live posture warning while moving
+        const cueNow = state.posture > (cfg.posture.good + cfg.posture.bad) / 2;
+        if (cueNow !== liveCueRef.current) {
+          liveCueRef.current = cueNow;
+          setLiveCue(cueNow);
+        }
 
         // Only touch React state when something visible changed
         const last = lastHudRef.current;
@@ -164,42 +239,43 @@ export default function PoseCamera() {
   }
 
   const running = status === "running";
+  const cfg = EXERCISES[exercise];
+  const averageScore = results.length
+    ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+    : null;
+  const bannerTone = liveCue ? "warn" : feedback.tone;
+  const bannerText = liveCue ? cfg.messages.posture : feedback.text;
 
   return (
     <div className="card">
       <div className="toolbar">
         <select
           value={exercise}
-          onChange={(e) => setExercise(e.target.value as ExerciseKey)}
+          disabled={running}
+          onChange={(e) => changeExercise(e.target.value as ExerciseKey)}
         >
-          {Object.entries(EXERCISES).map(([key, cfg]) => (
+          {Object.entries(EXERCISES).map(([key, c]) => (
             <option key={key} value={key}>
-              {cfg.label}
+              {c.label}
             </option>
           ))}
         </select>
 
         {!running ? (
           <button onClick={start} disabled={status === "loading"}>
-            {status === "loading" ? "Loading model..." : "Start camera"}
+            {status === "loading" ? "Loading model..." : "Start session"}
           </button>
         ) : (
           <button className="secondary" onClick={stop}>
-            Stop
+            Finish session
           </button>
         )}
-        <button
-          className="secondary"
-          onClick={() => {
-            counterRef.current.reset();
-            lastHudRef.current = { angle: 0, reps: 0, stage: "unknown" };
-            setHud({ angle: 0, reps: 0, stage: "unknown" });
-          }}
-        >
-          Reset reps
+        <button className="secondary" onClick={clearSession} disabled={status === "loading"}>
+          Reset
         </button>
       </div>
 
+      <p className="muted small">{cfg.cameraHint}</p>
       {status === "error" && <p className="error">Error: {error}</p>}
 
       <div className="stage">
@@ -215,11 +291,49 @@ export default function PoseCamera() {
             <span className="hud-value">{Math.round(hud.angle)}°</span>
           </div>
           <div>
-            <span className="hud-label">Stage</span>
-            <span className="hud-value small">{hud.stage}</span>
+            <span className="hud-label">Avg score</span>
+            <span
+              className={`hud-value ${averageScore === null ? "" : `score tone-${scoreTone(averageScore)}`}`}
+            >
+              {averageScore ?? "-"}
+            </span>
           </div>
         </div>
       </div>
+
+      <div className={`banner banner-${bannerTone}`}>{bannerText}</div>
+
+      {results.length > 0 && (
+        <table className="reps">
+          <thead>
+            <tr>
+              <th>Rep</th>
+              <th>Score</th>
+              <th>Depth</th>
+              <th>Posture</th>
+              <th>Tempo</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...results]
+              .reverse()
+              .slice(0, 10)
+              .map((r) => (
+                <tr key={r.index}>
+                  <td>{r.index}</td>
+                  <td className={`score tone-${scoreTone(r.score)}`}>{r.score}</td>
+                  <td>{r.rom}</td>
+                  <td>{r.posture}</td>
+                  <td>{r.tempo}</td>
+                  <td>{(r.durationMs / 1000).toFixed(1)}s</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
+
+      {summary && <SessionSummaryCard summary={summary} />}
     </div>
   );
 }
