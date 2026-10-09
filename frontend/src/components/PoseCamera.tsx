@@ -19,6 +19,10 @@ import {
   type RepResult,
   type SessionSummary,
 } from "../lib/scoring";
+import { ApiError } from "../api/client";
+import { buildSessionPayload, sessionsApi, type SessionPayload } from "../api/sessions";
+import { useAuth } from "../auth/useAuth";
+import SaveStatus, { type SaveState } from "./SaveStatus";
 import SessionSummaryCard from "./SessionSummaryCard";
 
 // Keep this version identical to the installed npm package version
@@ -41,6 +45,7 @@ const READY: Feedback = {
 };
 
 export default function PoseCamera() {
+  const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<PoseLandmarker | null>(null);
@@ -53,6 +58,7 @@ export default function PoseCamera() {
   const resultsRef = useRef<RepResult[]>([]);
   const sessionStartRef = useRef<number>(0);
   const liveCueRef = useRef<boolean>(false);
+  const pendingSaveRef = useRef<SessionPayload | null>(null);
 
   const [exercise, setExercise] = useState<ExerciseKey>("squat");
   const [status, setStatus] = useState<Status>("idle");
@@ -62,6 +68,7 @@ export default function PoseCamera() {
   const [feedback, setFeedback] = useState<Feedback>(READY);
   const [liveCue, setLiveCue] = useState(false);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
 
   // Cleanup when leaving the page
   useEffect(() => {
@@ -90,6 +97,30 @@ export default function PoseCamera() {
     setSummary(null);
     setLiveCue(false);
     setFeedback(READY);
+    pendingSaveRef.current = null;
+    setSaveState({ kind: "idle" });
+  }
+
+  async function saveSession(payload: SessionPayload) {
+    setSaveState({ kind: "saving" });
+    try {
+      await sessionsApi.create(payload);
+      pendingSaveRef.current = null;
+      setSaveState({ kind: "saved" });
+    } catch (err) {
+      pendingSaveRef.current = payload; // keep it so "Try again" can resend the same data
+      const message =
+        err instanceof ApiError && err.status === 401
+          ? "Your login expired. Log in again, then come back to this page."
+          : err instanceof Error
+            ? err.message
+            : "Unknown error";
+      setSaveState({ kind: "error", message });
+    }
+  }
+
+  function retrySave() {
+    if (pendingSaveRef.current) void saveSession(pendingSaveRef.current);
   }
 
   function changeExercise(key: ExerciseKey) {
@@ -152,9 +183,20 @@ export default function PoseCamera() {
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
 
     const cfg = EXERCISES[exerciseRef.current];
-    setSummary(
-      summarizeSession(cfg, resultsRef.current, Date.now() - sessionStartRef.current),
-    );
+    const endedAt = Date.now();
+    const finishedReps = resultsRef.current;
+    setSummary(summarizeSession(cfg, finishedReps, endedAt - sessionStartRef.current));
+
+    // Save the finished workout (only if at least one rep was completed)
+    if (finishedReps.length > 0) {
+      if (user) {
+        void saveSession(
+          buildSessionPayload(exerciseRef.current, sessionStartRef.current, endedAt, finishedReps),
+        );
+      } else {
+        setSaveState({ kind: "guest" });
+      }
+    }
     liveCueRef.current = false;
     setLiveCue(false);
     setStatus("idle");
@@ -334,6 +376,7 @@ export default function PoseCamera() {
       )}
 
       {summary && <SessionSummaryCard summary={summary} />}
+      <SaveStatus state={saveState} onRetry={retrySave} />
     </div>
   );
 }

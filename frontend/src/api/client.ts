@@ -51,5 +51,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     throw new ApiError(response.status, message);
   }
 
+  // e.g. DELETE answers 204 No Content: there is no JSON body to read
+  if (response.status === 204) return undefined as T;
+
   return (await response.json()) as T;
 }

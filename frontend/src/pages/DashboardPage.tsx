@@ -1,23 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { authApi } from "../api/auth";
+import { sessionsApi, type SessionSummary, type Stats } from "../api/sessions";
 import { ROLE_LABELS, type Role } from "../auth/AuthContext";
 import { useAuth } from "../auth/useAuth";
+import { EXERCISES, type ExerciseKey } from "../lib/exercises";
 import { scoreTone } from "../lib/scoring";
 
-// SAMPLE DATA: replaced by real saved sessions in a later step.
-const STATS = [
-  { label: "Sessions this week", value: "4" },
-  { label: "Average form score", value: "82" },
-  { label: "Total reps", value: "148" },
-  { label: "Day streak", value: "3" },
-];
+interface DashboardData {
+  stats: Stats;
+  sessions: SessionSummary[];
+}
 
-const RECENT = [
-  { date: "Mon", exercise: "Squat", reps: 20, score: 88 },
-  { date: "Tue", exercise: "Bicep curl", reps: 24, score: 79 },
-  { date: "Thu", exercise: "Squat", reps: 18, score: 91 },
-  { date: "Fri", exercise: "Bicep curl", reps: 22, score: 72 },
-];
+function exerciseLabel(key: string): string {
+  return EXERCISES[key as ExerciseKey]?.label ?? key;
+}
+
+function formatDuration(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 /** Only rendered by `npm run dev`; removed from production builds. */
 function DevRoleSwitcher() {
@@ -63,43 +76,127 @@ function DevRoleSwitcher() {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Load stats + latest sessions on mount, and again whenever reloadKey changes
+  useEffect(() => {
+    let cancelled = false;
+    const tzOffset = -new Date().getTimezoneOffset(); // minutes east of UTC
+    Promise.all([sessionsApi.stats(tzOffset), sessionsApi.list(10)])
+      .then(([stats, sessions]) => {
+        if (cancelled) return;
+        setData({ stats, sessions });
+        setError("");
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load your data");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  async function handleDelete(id: number) {
+    if (!window.confirm("Delete this session? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      await sessionsApi.remove(id);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete the session");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const stats = data?.stats;
+  const cards = [
+    { label: "Sessions (last 7 days)", value: stats ? String(stats.sessions_last_7_days) : "-" },
+    {
+      label: "Average form score",
+      value: stats?.average_score != null ? String(Math.round(stats.average_score)) : "-",
+    },
+    { label: "Total reps", value: stats ? String(stats.total_reps) : "-" },
+    { label: "Day streak", value: stats ? String(stats.streak_days) : "-" },
+  ];
 
   return (
     <>
       <h1>Hi {user?.name}</h1>
-      <p className="muted">Here is your progress. The numbers below are sample data for now.</p>
+      <p className="muted">Your progress, based on the workouts you have saved.</p>
+
+      {error && (
+        <p className="form-error spaced">
+          {error}{" "}
+          <button className="secondary" onClick={() => setReloadKey((k) => k + 1)}>
+            Retry
+          </button>
+        </p>
+      )}
 
       <section className="grid-4">
-        {STATS.map((s) => (
-          <div className="card stat" key={s.label}>
-            <span className="stat-value">{s.value}</span>
-            <span className="hud-label">{s.label}</span>
+        {cards.map((c) => (
+          <div className="card stat" key={c.label}>
+            <span className="stat-value">{c.value}</span>
+            <span className="hud-label">{c.label}</span>
           </div>
         ))}
       </section>
 
       <div className="card spaced">
         <h2>Recent sessions</h2>
-        <table className="reps">
-          <thead>
-            <tr>
-              <th>Day</th>
-              <th>Exercise</th>
-              <th>Reps</th>
-              <th>Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {RECENT.map((r) => (
-              <tr key={r.date}>
-                <td>{r.date}</td>
-                <td>{r.exercise}</td>
-                <td>{r.reps}</td>
-                <td className={`score tone-${scoreTone(r.score)}`}>{r.score}</td>
+
+        {data === null && !error && <p className="empty">Loading your progress...</p>}
+
+        {data && data.sessions.length === 0 && (
+          <p className="empty">
+            No sessions yet. <Link to="/workout">Start your first workout</Link> and it will show
+            up here.
+          </p>
+        )}
+
+        {data && data.sessions.length > 0 && (
+          <table className="reps">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Exercise</th>
+                <th>Reps</th>
+                <th>Score</th>
+                <th>Time</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.sessions.map((s) => (
+                <tr key={s.id}>
+                  <td>{formatDate(s.started_at)}</td>
+                  <td>{exerciseLabel(s.exercise)}</td>
+                  <td>{s.rep_count}</td>
+                  <td className={`score tone-${scoreTone(Math.round(s.avg_score))}`}>
+                    {Math.round(s.avg_score)}
+                  </td>
+                  <td>{formatDuration(s.duration_sec)}</td>
+                  <td className="actions">
+                    <button
+                      className="link-btn"
+                      disabled={deletingId === s.id}
+                      onClick={() => handleDelete(s.id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {data && data.sessions.length === 10 && (
+          <p className="muted small spaced">Showing your latest 10 sessions.</p>
+        )}
       </div>
 
       {import.meta.env.DEV && <DevRoleSwitcher />}
