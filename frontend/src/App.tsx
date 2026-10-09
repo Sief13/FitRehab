@@ -1,14 +1,50 @@
-import PoseCamera from "./components/PoseCamera";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import AuthProvider from "./auth/AuthProvider";
+import Layout from "./components/Layout";
+import RequireAuth from "./components/RequireAuth";
+import AuthPage from "./pages/AuthPage";
+import DashboardPage from "./pages/DashboardPage";
+import HomePage from "./pages/HomePage";
+import NotFoundPage from "./pages/NotFoundPage";
+import PlansPage from "./pages/PlansPage";
+import RehabPage from "./pages/RehabPage";
+import WorkoutPage from "./pages/WorkoutPage";
+import "./styles/app.css";
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      { index: true, element: <HomePage /> },
+      { path: "workout", element: <WorkoutPage /> },
+      { path: "login", element: <AuthPage mode="login" /> },
+      { path: "register", element: <AuthPage mode="register" /> },
+
+      // any signed-in user
+      {
+        element: <RequireAuth />,
+        children: [
+          { path: "dashboard", element: <DashboardPage /> },
+          { path: "rehab", element: <RehabPage /> },
+        ],
+      },
+
+      // premium members only
+      {
+        element: <RequireAuth roles={["premium"]} />,
+        children: [{ path: "plans", element: <PlansPage /> }],
+      },
+
+      { path: "*", element: <NotFoundPage /> },
+    ],
+  },
+]);
 
 export default function App() {
   return (
-    <main className="container">
-      <h1>AI Fitness &amp; Rehab — Pose Test</h1>
-      <p className="muted">
-        Stand 2–3 meters from the camera so your whole body is visible
-        (for curls, your upper body is enough). Everything runs in your browser.
-      </p>
-      <PoseCamera />
-    </main>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   );
 }
