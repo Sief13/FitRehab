@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ROLE_LABELS, type Role } from "../auth/AuthContext";
 import { useAuth } from "../auth/useAuth";
 
+type SignupRole = "user" | "physiatrist";
+
 export default function AuthPage({ mode }: { mode: "login" | "register" }) {
-  const { login } = useAuth();
+  const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? "/dashboard";
@@ -12,19 +13,28 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("user");
+  const [role, setRole] = useState<SignupRole>("user");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const isRegister = mode === "register";
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // TEMPORARY: no server yet. Step 4 sends these values to the backend instead.
-    login({
-      name: name.trim() || email.split("@")[0] || "Guest",
-      email,
-      role,
-    });
-    navigate(from, { replace: true });
+    setError("");
+    setSubmitting(true);
+    try {
+      if (isRegister) {
+        await register({ name: name.trim(), email: email.trim(), password, role });
+      } else {
+        await login(email.trim(), password);
+      }
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -44,36 +54,51 @@ export default function AuthPage({ mode }: { mode: "login" | "register" }) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
           />
         </label>
         <label>
-          Password
+          Password {isRegister && <small>(at least 8 characters)</small>}
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            minLength={6}
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            minLength={isRegister ? 8 : undefined}
             required
           />
         </label>
 
-        <div className="dev-box">
-          <strong>Development preview</strong>
-          <p>
-            Accounts are not real yet and nothing is sent anywhere. Choose a role to preview how
-            the app looks for each type of user.
-          </p>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isRegister && (
+          <fieldset className="role-picker">
+            <legend>I am a</legend>
+            <label>
+              <input
+                type="radio"
+                name="role"
+                checked={role === "user"}
+                onChange={() => setRole("user")}
+              />
+              Member (training or recovering)
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="role"
+                checked={role === "physiatrist"}
+                onChange={() => setRole("physiatrist")}
+              />
+              Physiatrist (rehabilitation doctor)
+            </label>
+          </fieldset>
+        )}
 
-        <button type="submit">{isRegister ? "Sign up" : "Log in"}</button>
+        {error && <p className="form-error">{error}</p>}
+
+        <button type="submit" disabled={submitting}>
+          {submitting ? "Please wait..." : isRegister ? "Sign up" : "Log in"}
+        </button>
       </form>
 
       <p className="muted no-margin">

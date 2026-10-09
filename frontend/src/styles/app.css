@@ -105,3 +105,27 @@ a.btn.big { padding: 12px 22px; font-size: 1.05rem; }
   color: #fbbf24;
 }
 .dev-box p { margin: 6px 0 10px; color: var(--muted); }
+
+/* ---------- auth form additions ---------- */
+.form small { color: var(--muted); font-weight: 400; }
+.form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(251, 113, 133, 0.12);
+  border: 1px solid #fb7185;
+  color: #fb7185;
+  font-size: 0.9rem;
+}
+.role-picker {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px 12px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.role-picker legend { padding: 0 6px; color: var(--muted); font-size: 0.9rem; }
+.role-picker label { flex-direction: row; align-items: center; gap: 10px; color: var(--text); cursor: pointer; }
+.role-picker input { accent-color: var(--accent); }

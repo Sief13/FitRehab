@@ -21,10 +21,13 @@ function AccessDenied({ allowed, current }: { allowed: Role[]; current: Role }) 
 /**
  * Route guard. Not signed in -> redirect to /login (and come back afterwards).
  * Signed in with the wrong role -> "Access restricted" page.
+ * The real protection is on the server; this only decides what the UI shows.
  */
 export default function RequireAuth({ roles }: { roles?: Role[] }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
+
+  if (loading) return <p className="muted">Loading...</p>;
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;

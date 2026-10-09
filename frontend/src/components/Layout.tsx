@@ -6,7 +6,7 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   isActive ? "nav-link active" : "nav-link";
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -46,7 +46,7 @@ export default function Layout() {
           </nav>
 
           <div className="auth-actions">
-            {user ? (
+            {loading ? null : user ? (
               <>
                 <span className="user-chip">
                   {user.name}
