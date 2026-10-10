@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60 * 24
     cors_origins: str = "http://localhost:5173"
 
+    # Premium: one payment buys `premium_period_days` days of Premium (amounts are in cents)
+    premium_price_cents: int = 14900
+    premium_currency: str = "EGP"
+    premium_period_days: int = 30
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

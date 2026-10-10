@@ -38,6 +38,11 @@ export default function Layout() {
                 My plan
               </NavLink>
             )}
+            {showPlan && (
+              <NavLink to="/premium" className={linkClass}>
+                Premium
+              </NavLink>
+            )}
             {user && (
               <NavLink to="/rehab" className={linkClass}>
                 Rehab

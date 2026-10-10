@@ -3,11 +3,13 @@ import AuthProvider from "./auth/AuthProvider";
 import Layout from "./components/Layout";
 import RequireAuth from "./components/RequireAuth";
 import AuthPage from "./pages/AuthPage";
+import CheckoutPage from "./pages/CheckoutPage";
 import DashboardPage from "./pages/DashboardPage";
 import HomePage from "./pages/HomePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PlansPage from "./pages/PlansPage";
 import PatientDetailPage from "./pages/rehab/PatientDetailPage";
+import PremiumPage from "./pages/PremiumPage";
 import RehabPage from "./pages/RehabPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import "./styles/app.css";
@@ -31,10 +33,14 @@ const router = createBrowserRouter([
         ],
       },
 
-      // premium members only
+      // members (Free or Premium): plan, Premium page and the sandbox checkout
       {
-        element: <RequireAuth roles={["premium"]} />,
-        children: [{ path: "plans", element: <PlansPage /> }],
+        element: <RequireAuth roles={["user", "premium"]} />,
+        children: [
+          { path: "plans", element: <PlansPage /> },
+          { path: "premium", element: <PremiumPage /> },
+          { path: "checkout/:checkoutId", element: <CheckoutPage /> },
+        ],
       },
 
       // physiatrists only

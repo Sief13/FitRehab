@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.deps import CurrentUser, DbSession
 from app.models import User
 from app.schemas import LoginRequest, RegisterRequest, TokenResponse, UserOut
+from app.subscriptions import sync_premium_status
 from app.security import DUMMY_HASH, create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -44,6 +45,7 @@ def login(body: LoginRequest, db: DbSession) -> TokenResponse:
     if user is None or not password_ok:
         # Same message for "no such email" and "wrong password" on purpose.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    sync_premium_status(db, user)  # an expired Premium account is shown as Free right away
     return _token_response(user)
 
 

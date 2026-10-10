@@ -127,3 +127,34 @@ class RepRecord(Base):
     min_angle: Mapped[int]
 
     session: Mapped["WorkoutSession"] = relationship(back_populates="reps")
+
+
+class Payment(Base):
+    """One checkout. It starts as "pending" and becomes "paid" when the payment succeeds."""
+
+    __tablename__ = "payments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # random id of the hosted checkout page (what a real provider calls a "checkout session")
+    checkout_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    provider: Mapped[str] = mapped_column(String(20), default="sandbox")
+    description: Mapped[str] = mapped_column(String(200))
+    amount_cents: Mapped[int]
+    currency: Mapped[str] = mapped_column(String(3))
+    status: Mapped[str] = mapped_column(String(10), default="pending")  # "pending" | "paid"
+    # Only the last 4 digits of a TEST card are kept. Card numbers are never stored.
+    card_last4: Mapped[str | None] = mapped_column(String(4), default=None)
+    failure_reason: Mapped[str | None] = mapped_column(String(100), default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class Subscription(Base):
+    """Premium access for one user, valid until `current_period_end`."""
+
+    __tablename__ = "subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))

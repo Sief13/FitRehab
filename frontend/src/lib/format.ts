@@ -26,3 +26,16 @@ export function toneAgainstTarget(score: number, target: number): "good" | "ok" 
   if (score >= target - 10) return "ok";
   return "bad";
 }
+
+/** 14900 + "EGP" -> "EGP 149.00" (the exact look depends on the browser's language) */
+export function formatMoney(cents: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${currency}`;
+  }
+}
+
+export function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}

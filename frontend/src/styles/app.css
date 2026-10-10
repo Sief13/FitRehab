@@ -253,3 +253,54 @@ a.btn.big { padding: 12px 22px; font-size: 1.05rem; }
 .link-btn.neutral { color: var(--accent); }
 .reps-detail > td { background: #101728; padding: 10px 14px; }
 .reps-detail .reps { margin-top: 0; }
+
+/* ---------- premium, checkout, adaptive plan ---------- */
+.pricing { max-width: 560px; }
+.pricing-price { margin-bottom: 12px; }
+.benefits { margin: 0 0 16px; padding-left: 20px; line-height: 1.8; }
+
+.sandbox-banner {
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.checkout-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 0 0 8px;
+  border-radius: 10px;
+  background: #101728;
+  text-align: left;
+}
+.two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.test-cards {
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 8px 0 16px;
+}
+.test-cards ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+.test-cards code { color: var(--text); }
+
+.insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.insight { padding: 12px 14px; }
+.insight strong { display: block; margin-bottom: 4px; }
+
+.week-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.tab { background: #1b2540; color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
+.tab.active { background: var(--accent); color: #04222a; border-color: var(--accent); font-weight: 700; }
+
+.schedule th { width: 56px; color: var(--muted); font-weight: 600; vertical-align: top; }
+.schedule td { padding: 10px 8px; }
+.schedule tr.rest td, .schedule tr.rest th { opacity: 0.6; }
+.plan-line + .plan-line { margin-top: 10px; }

@@ -189,3 +189,89 @@ class PatientOverview(BaseModel):
     stats: StatsOut
     plan: PlanOut | None
     sessions: list[SessionOut]
+
+
+# ---------------------------------------------------------------- billing (Premium)
+
+class BillingStatus(_UtcModel):
+    role: Role
+    is_premium: bool
+    premium_until: datetime | None
+    price_cents: int
+    currency: str
+    period_days: int
+
+
+class CheckoutCreated(BaseModel):
+    checkout_id: str
+
+
+class CheckoutInfo(BaseModel):
+    checkout_id: str
+    description: str
+    amount_cents: int
+    currency: str
+    status: str
+
+
+class PayRequest(BaseModel):
+    """Card details for the SANDBOX checkout. Only test cards are accepted, and the number
+    is never stored (only the last 4 digits of a test card)."""
+
+    card_number: str = Field(min_length=12, max_length=23)
+    exp_month: int = Field(ge=1, le=12)
+    exp_year: int = Field(ge=0, le=2100)  # 26 or 2026
+    cvc: str = Field(pattern=r"^\d{3,4}$")
+    cardholder: str = Field(min_length=1, max_length=100)
+
+
+class PayResult(_UtcModel):
+    user: UserOut
+    premium_until: datetime
+
+
+class PaymentOut(_UtcModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    description: str
+    amount_cents: int
+    currency: str
+    status: str
+    card_last4: str | None
+    created_at: datetime
+    paid_at: datetime | None
+
+
+# ---------------------------------------------------------------- premium adaptive plan
+
+class MonthlyPlanExercise(BaseModel):
+    exercise: str
+    sets: int
+    reps_per_set: int
+    target_score: int
+    focus: str
+
+
+class MonthlyPlanDay(BaseModel):
+    day: str  # "Mon" ... "Sun"
+    items: list[MonthlyPlanExercise]  # empty list = rest day
+
+
+class MonthlyPlanWeek(BaseModel):
+    week: int
+    title: str
+    days: list[MonthlyPlanDay]
+
+
+class MonthlyPlanInsight(BaseModel):
+    exercise: str
+    message: str
+
+
+class MonthlyPlanOut(_UtcModel):
+    generated_at: datetime
+    window_days: int
+    based_on_sessions: int
+    insights: list[MonthlyPlanInsight]
+    weeks: list[MonthlyPlanWeek]
