@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from app.routers.sessions import compute_streak
+from app.stats import compute_streak
 
 REP_A = {"score": 90, "rom": 100, "posture": 80, "tempo": 100, "duration_ms": 2000, "min_angle": 85}
 REP_B = {"score": 70, "rom": 60, "posture": 100, "tempo": 80, "duration_ms": 1500, "min_angle": 98}

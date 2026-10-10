@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, field_validator
 
 from app.timeutil import as_utc
 
@@ -10,6 +10,16 @@ Role = Literal["user", "premium", "physiatrist"]
 RegisterRole = Literal["user", "physiatrist"]
 Exercise = Literal["squat", "bicep_curl"]
 Percent = Annotated[int, Field(ge=0, le=100)]
+Title = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+
+
+class _UtcModel(BaseModel):
+    """Base for output models that contain datetimes: labels them as UTC in the JSON."""
+
+    @field_validator("*")
+    @classmethod
+    def _label_datetimes_as_utc(cls, value):
+        return as_utc(value) if isinstance(value, datetime) else value
 
 
 # ---------------------------------------------------------------- auth
@@ -59,6 +69,8 @@ class SessionCreate(BaseModel):
     started_at: datetime
     duration_sec: int = Field(ge=0, le=86_400)
     reps: list[RepIn] = Field(min_length=1, max_length=500)
+    # Set when this workout fulfils a prescribed rehab exercise (checked by the server)
+    plan_item_id: int | None = None
 
     @field_validator("started_at")
     @classmethod
@@ -81,7 +93,7 @@ class RepOut(BaseModel):
     min_angle: int
 
 
-class SessionOut(BaseModel):
+class SessionOut(_UtcModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -93,12 +105,7 @@ class SessionOut(BaseModel):
     avg_rom: float
     avg_posture: float
     avg_tempo: float
-
-    @field_validator("started_at")
-    @classmethod
-    def _label_as_utc(cls, value: datetime) -> datetime:
-        # makes the JSON carry a UTC marker ("Z") so the browser converts it to local time correctly
-        return as_utc(value)
+    plan_item_id: int | None = None
 
 
 class SessionDetail(SessionOut):
@@ -111,3 +118,74 @@ class StatsOut(BaseModel):
     sessions_last_7_days: int
     average_score: float | None  # average over every rep ever recorded; None before the first one
     streak_days: int
+
+
+# ---------------------------------------------------------------- rehabilitation
+
+class PersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: str
+
+
+class LinkRequest(BaseModel):
+    physiatrist_email: EmailStr
+
+
+class LinkOut(_UtcModel):
+    """A care link as seen by one side: `person` is the OTHER party."""
+
+    id: int
+    status: Literal["pending", "active"]
+    created_at: datetime
+    person: PersonOut
+
+
+class PlanItemIn(BaseModel):
+    exercise: Exercise
+    sets: int = Field(ge=1, le=10)
+    reps_per_set: int = Field(ge=1, le=50)
+    target_score: Percent = 80
+
+
+class PlanCreate(BaseModel):
+    title: Title
+    notes: Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] = ""
+    items: list[PlanItemIn] = Field(min_length=1, max_length=10)
+
+
+class ItemProgress(_UtcModel):
+    """How much of a prescribed exercise the patient has actually done (from saved workouts)."""
+
+    sessions: int = 0
+    total_reps: int = 0
+    average_score: float | None = None
+    last_done_at: datetime | None = None
+
+
+class PlanItemOut(BaseModel):
+    id: int
+    exercise: str
+    sets: int
+    reps_per_set: int
+    target_score: int
+    progress: ItemProgress
+
+
+class PlanOut(_UtcModel):
+    id: int
+    title: str
+    notes: str
+    is_active: bool
+    created_at: datetime
+    physiatrist: PersonOut
+    items: list[PlanItemOut]
+
+
+class PatientOverview(BaseModel):
+    link: LinkOut
+    stats: StatsOut
+    plan: PlanOut | None
+    sessions: list[SessionOut]

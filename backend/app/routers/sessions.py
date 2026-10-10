@@ -1,27 +1,12 @@
-from datetime import date, datetime, timedelta, timezone
-
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.deps import CurrentUser, DbSession
-from app.models import RepRecord, User, WorkoutSession
+from app.models import RehabPlanItem, RepRecord, User, WorkoutSession
 from app.schemas import SessionCreate, SessionDetail, SessionOut, StatsOut
-from app.timeutil import as_utc
+from app.stats import compute_user_stats
 
 router = APIRouter(prefix="/api", tags=["sessions"])
-
-
-def compute_streak(active_days: set[date], today: date) -> int:
-    """Number of consecutive days with a workout, ending today or yesterday.
-
-    A streak is still alive if you trained yesterday but haven't trained yet today.
-    """
-    day = today if today in active_days else today - timedelta(days=1)
-    streak = 0
-    while day in active_days:
-        streak += 1
-        day -= timedelta(days=1)
-    return streak
 
 
 def _get_own_session(db: DbSession, user: User, session_id: int) -> WorkoutSession:
@@ -32,8 +17,34 @@ def _get_own_session(db: DbSession, user: User, session_id: int) -> WorkoutSessi
     return session
 
 
+def _check_plan_item(db: DbSession, user: User, body: SessionCreate) -> None:
+    """A workout may only be tagged with an exercise from the user's own, active rehab plan."""
+    item = db.get(RehabPlanItem, body.plan_item_id) if body.plan_item_id is not None else None
+    link = item.plan.link if item is not None else None
+    valid = (
+        item is not None
+        and item.plan.is_active
+        and link is not None
+        and link.status == "active"
+        and link.patient_id == user.id
+    )
+    if not valid:
+        raise HTTPException(
+            status_code=422,
+            detail="This exercise is not part of your active rehab plan",
+        )
+    if item.exercise != body.exercise:
+        raise HTTPException(
+            status_code=422,
+            detail="The exercise does not match the prescribed exercise",
+        )
+
+
 @router.post("/sessions", response_model=SessionDetail, status_code=status.HTTP_201_CREATED)
 def create_session(body: SessionCreate, current_user: CurrentUser, db: DbSession) -> WorkoutSession:
+    if body.plan_item_id is not None:
+        _check_plan_item(db, current_user, body)
+
     reps = body.reps
     n = len(reps)
 
@@ -50,6 +61,7 @@ def create_session(body: SessionCreate, current_user: CurrentUser, db: DbSession
         avg_rom=avg([r.rom for r in reps]),
         avg_posture=avg([r.posture for r in reps]),
         avg_tempo=avg([r.tempo for r in reps]),
+        plan_item_id=body.plan_item_id,
         reps=[
             RepRecord(
                 rep_index=i,
@@ -104,34 +116,4 @@ def get_stats(
     # minutes EAST of UTC, i.e. -new Date().getTimezoneOffset() in the browser (Egypt: 120 or 180)
     tz_offset: int = Query(0, ge=-840, le=840),
 ) -> StatsOut:
-    uid = current_user.id
-
-    total_sessions, total_reps = db.execute(
-        select(func.count(WorkoutSession.id), func.coalesce(func.sum(WorkoutSession.rep_count), 0)).where(
-            WorkoutSession.user_id == uid
-        )
-    ).one()
-
-    average_score = db.scalar(
-        select(func.avg(RepRecord.score))
-        .join(WorkoutSession, RepRecord.session_id == WorkoutSession.id)
-        .where(WorkoutSession.user_id == uid)
-    )
-
-    # "Days" depend on the user's time zone, so shift every start time before taking its date.
-    shift = timedelta(minutes=tz_offset)
-    local_days = [
-        (as_utc(s) + shift).date()
-        for s in db.scalars(select(WorkoutSession.started_at).where(WorkoutSession.user_id == uid))
-    ]
-    today = (datetime.now(timezone.utc) + shift).date()
-    week_start = today - timedelta(days=6)  # today and the 6 days before it
-    sessions_last_7_days = sum(1 for d in local_days if week_start <= d <= today)
-
-    return StatsOut(
-        total_sessions=total_sessions,
-        total_reps=int(total_reps),
-        sessions_last_7_days=sessions_last_7_days,
-        average_score=round(average_score, 1) if average_score is not None else None,
-        streak_days=compute_streak(set(local_days), today),
-    )
+    return compute_user_stats(db, current_user.id, tz_offset)

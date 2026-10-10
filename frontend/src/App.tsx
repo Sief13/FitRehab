@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import HomePage from "./pages/HomePage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PlansPage from "./pages/PlansPage";
+import PatientDetailPage from "./pages/rehab/PatientDetailPage";
 import RehabPage from "./pages/RehabPage";
 import WorkoutPage from "./pages/WorkoutPage";
 import "./styles/app.css";
@@ -34,6 +35,12 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth roles={["premium"]} />,
         children: [{ path: "plans", element: <PlansPage /> }],
+      },
+
+      // physiatrists only
+      {
+        element: <RequireAuth roles={["physiatrist"]} />,
+        children: [{ path: "rehab/patients/:linkId", element: <PatientDetailPage /> }],
       },
 
       { path: "*", element: <NotFoundPage /> },

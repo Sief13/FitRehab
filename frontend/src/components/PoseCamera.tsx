@@ -19,9 +19,11 @@ import {
   type RepResult,
   type SessionSummary,
 } from "../lib/scoring";
+import type { PlanItem } from "../api/rehab";
 import { ApiError } from "../api/client";
 import { buildSessionPayload, sessionsApi, type SessionPayload } from "../api/sessions";
 import { useAuth } from "../auth/useAuth";
+import PrescriptionBar from "./PrescriptionBar";
 import SaveStatus, { type SaveState } from "./SaveStatus";
 import SessionSummaryCard from "./SessionSummaryCard";
 
@@ -44,7 +46,11 @@ const READY: Feedback = {
   tone: "info",
 };
 
-export default function PoseCamera() {
+/**
+ * `planItem` is set when the workout was started from a rehab plan: the exercise is then
+ * fixed, a progress bar is shown, and the saved session is linked to that prescribed exercise.
+ */
+export default function PoseCamera({ planItem }: { planItem?: PlanItem }) {
   const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,15 +58,15 @@ export default function PoseCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const lastVideoTimeRef = useRef<number>(-1);
-  const exerciseRef = useRef<ExerciseKey>("squat");
-  const counterRef = useRef<RepCounter>(new RepCounter(EXERCISES.squat));
+  const exerciseRef = useRef<ExerciseKey>(planItem?.exercise ?? "squat");
+  const counterRef = useRef<RepCounter>(new RepCounter(EXERCISES[planItem?.exercise ?? "squat"]));
   const lastHudRef = useRef<CounterState>(IDLE_HUD);
   const resultsRef = useRef<RepResult[]>([]);
   const sessionStartRef = useRef<number>(0);
   const liveCueRef = useRef<boolean>(false);
   const pendingSaveRef = useRef<SessionPayload | null>(null);
 
-  const [exercise, setExercise] = useState<ExerciseKey>("squat");
+  const [exercise, setExercise] = useState<ExerciseKey>(planItem?.exercise ?? "squat");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState("");
   const [hud, setHud] = useState<CounterState>(IDLE_HUD);
@@ -191,7 +197,13 @@ export default function PoseCamera() {
     if (finishedReps.length > 0) {
       if (user) {
         void saveSession(
-          buildSessionPayload(exerciseRef.current, sessionStartRef.current, endedAt, finishedReps),
+          buildSessionPayload(
+            exerciseRef.current,
+            sessionStartRef.current,
+            endedAt,
+            finishedReps,
+            planItem?.id,
+          ),
         );
       } else {
         setSaveState({ kind: "guest" });
@@ -293,7 +305,7 @@ export default function PoseCamera() {
       <div className="toolbar">
         <select
           value={exercise}
-          disabled={running}
+          disabled={running || planItem !== undefined}
           onChange={(e) => changeExercise(e.target.value as ExerciseKey)}
         >
           {Object.entries(EXERCISES).map(([key, c]) => (
@@ -317,6 +329,9 @@ export default function PoseCamera() {
         </button>
       </div>
 
+      {planItem && (
+        <PrescriptionBar item={planItem} repsDone={hud.reps} averageScore={averageScore} />
+      )}
       <p className="muted small">{cfg.cameraHint}</p>
       {status === "error" && <p className="error">Error: {error}</p>}
 

@@ -16,6 +16,8 @@ export interface SessionPayload {
   started_at: string; // ISO time, e.g. 2026-10-09T10:15:00.000Z
   duration_sec: number;
   reps: RepPayload[];
+  /** set when this workout fulfils a prescribed rehab exercise */
+  plan_item_id?: number;
 }
 
 export interface SessionSummary {
@@ -28,6 +30,7 @@ export interface SessionSummary {
   avg_rom: number;
   avg_posture: number;
   avg_tempo: number;
+  plan_item_id: number | null;
 }
 
 export interface RepDetail {
@@ -58,9 +61,11 @@ export function buildSessionPayload(
   startedAtMs: number,
   endedAtMs: number,
   results: RepResult[],
+  planItemId?: number,
 ): SessionPayload {
   return {
     exercise,
+    plan_item_id: planItemId,
     started_at: new Date(startedAtMs).toISOString(),
     duration_sec: Math.min(86_400, Math.max(0, Math.round((endedAtMs - startedAtMs) / 1000))),
     reps: results.slice(0, 500).map((r) => ({
