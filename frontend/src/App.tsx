@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import AuthProvider from "./auth/AuthProvider";
 import Layout from "./components/Layout";
@@ -11,8 +12,11 @@ import PlansPage from "./pages/PlansPage";
 import PatientDetailPage from "./pages/rehab/PatientDetailPage";
 import PremiumPage from "./pages/PremiumPage";
 import RehabPage from "./pages/RehabPage";
-import WorkoutPage from "./pages/WorkoutPage";
 import "./styles/app.css";
+
+// The workout page pulls in the large pose-detection library, so it is only downloaded
+// when someone actually opens it. The home page and the login load much faster this way.
+const WorkoutPage = lazy(() => import("./pages/WorkoutPage"));
 
 const router = createBrowserRouter([
   {

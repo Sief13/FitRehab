@@ -1,0 +1,46 @@
+# Local REHEARSAL of the production setup: the same backend container, a real PostgreSQL
+# database, and one address that serves the site and the API (like CloudFront on AWS).
+#
+#   1) build the frontend:        cd frontend && npm run build
+#   2) create a file named .env next to this file, containing one line:
+#        SECRET_KEY=<a long random text>
+#   3) start everything:          docker compose up --build
+#   4) open http://localhost:8080
+#   Stop with Ctrl+C. Remove containers and the database with:  docker compose down -v
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fitrehab
+      POSTGRES_PASSWORD: fitrehab
+      POSTGRES_DB: fitrehab
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitrehab -d fitrehab"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://fitrehab:fitrehab@db:5432/fitrehab
+      SECRET_KEY: ${SECRET_KEY:?Create a .env file next to docker-compose.yml with a line SECRET_KEY=...}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

@@ -1,0 +1,5 @@
+# Keep Unix line endings for files that run inside Linux containers.
+# (Windows editors may otherwise save them with CRLF, and "#!/bin/sh^M" fails to start.)
+* text=auto
+*.sh text eol=lf
+Dockerfile text eol=lf

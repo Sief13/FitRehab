@@ -8,11 +8,19 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # "development" enables /docs and the /api/dev tools. Anything else is treated as production.
     app_env: str = "development"
+    # SQLite for local development. PostgreSQL in production, for example:
+    #   postgresql+psycopg://USER:PASSWORD@HOST:5432/DBNAME
     database_url: str = "sqlite:///./fitrehab.db"
     secret_key: str = INSECURE_DEFAULT_KEY
     access_token_minutes: int = 60 * 24
     cors_origins: str = "http://localhost:5173"
+
+    # When set, every request (except /api/health) must carry the header
+    #   X-Origin-Verify: <this value>
+    # CloudFront adds it, so the API cannot be reached by going around CloudFront.
+    origin_secret: str = ""
 
     # Premium: one payment buys `premium_period_days` days of Premium (amounts are in cents)
     premium_price_cents: int = 14900

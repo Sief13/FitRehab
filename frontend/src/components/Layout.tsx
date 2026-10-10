@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ROLE_LABELS } from "../auth/AuthContext";
 import { useAuth } from "../auth/useAuth";
@@ -76,7 +77,9 @@ export default function Layout() {
       </header>
 
       <main className="container">
-        <Outlet />
+        <Suspense fallback={<p className="muted">Loading...</p>}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <footer className="footer">FitRehab AI · Graduation project · Alexandria University</footer>

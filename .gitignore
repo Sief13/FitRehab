@@ -1,0 +1,4 @@
+# secrets and local databases must never be committed
+.env
+*.db
+.DS_Store

@@ -143,10 +143,13 @@ def test_renewing_adds_time_on_top_of_what_is_left(client):
 
 def _expire_subscription(client, email="member@example.com"):
     db = db_session()
-    user = db.scalar(select(User).where(User.email == email))
-    sub = db.scalar(select(Subscription).where(Subscription.user_id == user.id))
-    sub.current_period_end = datetime.now(timezone.utc) - timedelta(minutes=1)
-    db.commit()
+    try:
+        user = db.scalar(select(User).where(User.email == email))
+        sub = db.scalar(select(Subscription).where(Subscription.user_id == user.id))
+        sub.current_period_end = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+    finally:
+        db.close()
 
 
 def test_premium_ends_when_the_paid_period_ends(client):

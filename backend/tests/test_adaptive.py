@@ -169,7 +169,10 @@ def test_collect_stats_is_weighted_by_rep_count(client):
     from app.models import User
 
     db = next(app.dependency_overrides[get_db]())
-    user = db.scalar(select(User).where(User.email == "member@example.com"))
-    result = collect_exercise_stats(db, user.id, datetime.now(timezone.utc))
+    try:
+        user = db.scalar(select(User).where(User.email == "member@example.com"))
+        result = collect_exercise_stats(db, user.id, datetime.now(timezone.utc))
+    finally:
+        db.close()
     assert result["squat"].sessions == 2 and result["squat"].reps == 4
     assert result["squat"].avg_score == (100 * 1 + 70 * 3) / 4
